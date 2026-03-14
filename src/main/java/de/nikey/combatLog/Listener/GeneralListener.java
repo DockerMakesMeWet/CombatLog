@@ -1,14 +1,7 @@
 package de.nikey.combatLog.Listener;
 
 import com.destroystokyo.paper.event.player.PlayerElytraBoostEvent;
-import com.sk89q.worldedit.bukkit.BukkitAdapter;
-import com.sk89q.worldguard.LocalPlayer;
-import com.sk89q.worldguard.WorldGuard;
-import com.sk89q.worldguard.bukkit.WorldGuardPlugin;
-import com.sk89q.worldguard.protection.regions.RegionContainer;
-import com.sk89q.worldguard.protection.regions.RegionQuery;
 import de.nikey.combatLog.CombatLog;
-import de.nikey.combatLog.Utils.WorldGuardHook;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -115,6 +108,24 @@ public class GeneralListener implements Listener {
         return LEGACY.deserialize(raw);
     }
 
+    private String bypassPermissionNode() {
+        return CombatLog.getPlugin(CombatLog.class)
+                .getConfig()
+                .getString("combat-log.permissions.bypass", "combatlog.bypass");
+    }
+
+    private boolean hasBypass(Player player) {
+        return player.hasPermission(bypassPermissionNode());
+    }
+
+    private boolean isInCombat(Player player) {
+        if (hasBypass(player)) {
+            cleanup(player.getUniqueId());
+            return false;
+        }
+        return combatTimers.containsKey(player.getUniqueId());
+    }
+
     // ------------------------------------------------------------
     // Combat triggers
     // ------------------------------------------------------------
@@ -159,6 +170,7 @@ public class GeneralListener implements Listener {
         if (event.getDamager() instanceof EnderCrystal) {
             if (!explosionsSetCombat()) return;
             if (event.getEntity() instanceof Player damaged) {
+                if (hasBypass(damaged)) return;
                 cancelCombatTimer(damaged);
                 startCombatTimer(damaged);
                 damaged.setGliding(false);
@@ -167,12 +179,17 @@ public class GeneralListener implements Listener {
     }
 
     private void tagBoth(Player damaged, Player damager) {
-        cancelCombatTimer(damaged);
-        cancelCombatTimer(damager);
-        startCombatTimer(damaged);
-        startCombatTimer(damager);
-        damaged.setGliding(false);
-        damager.setGliding(false);
+        if (!hasBypass(damaged)) {
+            cancelCombatTimer(damaged);
+            startCombatTimer(damaged);
+            damaged.setGliding(false);
+        }
+
+        if (!hasBypass(damager)) {
+            cancelCombatTimer(damager);
+            startCombatTimer(damager);
+            damager.setGliding(false);
+        }
     }
 
     @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
@@ -181,6 +198,7 @@ public class GeneralListener implements Listener {
         if (isIgnoredWorld(event.getEntity().getWorld())) return;
 
         if (event.getEntity() instanceof Player damaged) {
+            if (hasBypass(damaged)) return;
             if (event.getCause() == EntityDamageEvent.DamageCause.BLOCK_EXPLOSION) {
                 cancelCombatTimer(damaged);
                 startCombatTimer(damaged);
@@ -193,36 +211,6 @@ public class GeneralListener implements Listener {
         }
     }
 
-    // ------------------------------------------------------------
-    // WorldGuard region entry denial while in combat
-    // ------------------------------------------------------------
-
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onPlayerMoveIntoRegion(PlayerMoveEvent event) {
-        if (!CombatLog.isWorldGuardEnabled()) return;
-        if (event.getTo() == null) return;
-
-        Player player = event.getPlayer();
-        if (!combatTimers.containsKey(player.getUniqueId())) return;
-
-        if (event.getFrom().getBlockX() == event.getTo().getBlockX()
-                && event.getFrom().getBlockZ() == event.getTo().getBlockZ()
-                && event.getFrom().getBlockY() == event.getTo().getBlockY()) return;
-
-        LocalPlayer localPlayer = WorldGuardPlugin.inst().wrapPlayer(player);
-        RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
-        RegionQuery query = container.createQuery();
-
-        if (!query.testState(BukkitAdapter.adapt(event.getTo()), localPlayer, WorldGuardHook.ALLOW_COMBAT_ENTRY)) {
-            event.setCancelled(true);
-            player.teleport(event.getFrom());
-
-            player.sendMessage(msg(
-                    "combat-log.messages.region-entry-denied",
-                    "§cYou can't enter this region in combat"
-            ));
-        }
-    }
 
     // ------------------------------------------------------------
     // Combat zone tagging on join (kept as-is, just new paths)
@@ -237,6 +225,7 @@ public class GeneralListener implements Listener {
         if (!combatZoneEnabled()) return;
 
         Player player = event.getPlayer();
+        if (hasBypass(player)) return;
 
         new BukkitRunnable() {
             @Override
@@ -256,6 +245,7 @@ public class GeneralListener implements Listener {
                     if (nearby.isDead()) continue;
                     if (nearby.getGameMode() == GameMode.SPECTATOR || nearby.getGameMode() == GameMode.CREATIVE) continue;
                     if (isIgnoredWorld(nearby)) continue;
+                    if (hasBypass(nearby)) continue;
 
                     cancelCombatTimer(nearby);
                     cancelCombatTimer(player);
@@ -275,12 +265,13 @@ public class GeneralListener implements Listener {
         if (!(event.getEntity() instanceof EnderPearl pearl)) return;
         if (!(pearl.getShooter() instanceof Player player)) return;
         if (isIgnoredWorld(player)) return;
+        if (hasBypass(player)) return;
 
         if (!enderpearlSetCombatOnLand()) return;
 
         boolean onlyIfAlready = enderpearlOnlyIfAlreadyInCombat();
-        boolean isInCombat = combatTimers.containsKey(player.getUniqueId());
-        if (onlyIfAlready && !isInCombat) return;
+        boolean alreadyInCombat = isInCombat(player);
+        if (onlyIfAlready && !alreadyInCombat) return;
 
         cancelCombatTimer(player);
         startCombatTimer(player);
@@ -298,7 +289,7 @@ public class GeneralListener implements Listener {
         Player player = event.getPlayer();
 
         if (!stopRiptidingInCombat()) return;
-        if (!combatTimers.containsKey(player.getUniqueId())) return;
+        if (!isInCombat(player)) return;
 
         if (player.isRiptiding()) {
             long now = System.currentTimeMillis();
@@ -327,6 +318,11 @@ public class GeneralListener implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
 
+        if (hasBypass(player)) {
+            cancelCombatTimer(player);
+            return;
+        }
+
         if (combatTimers.containsKey(player.getUniqueId())) {
             String raw = CombatLog.getPlugin(CombatLog.class)
                     .getConfig()
@@ -352,7 +348,7 @@ public class GeneralListener implements Listener {
         Player player = event.getPlayer();
 
         if (!teleportingDisabledInCombat()) return;
-        if (!combatTimers.containsKey(player.getUniqueId())) return;
+        if (!isInCombat(player)) return;
 
         if (event.getCause() == PlayerTeleportEvent.TeleportCause.UNKNOWN) return;
 
@@ -373,7 +369,7 @@ public class GeneralListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onPlayerCommandPreprocess(PlayerCommandPreprocessEvent event) {
         Player player = event.getPlayer();
-        if (!combatTimers.containsKey(player.getUniqueId())) return;
+        if (!isInCombat(player)) return;
 
         String[] args = event.getMessage().split(" ");
         String cmd = args[0].startsWith("/") ? args[0].substring(1) : args[0];
@@ -404,7 +400,7 @@ public class GeneralListener implements Listener {
         if (!(event.getEntity() instanceof Player player)) return;
 
         if (!elytraDisabledInCombat()) return;
-        if (!combatTimers.containsKey(player.getUniqueId())) return;
+        if (!isInCombat(player)) return;
         if (!event.isGliding()) return;
 
         player.setGliding(false);
@@ -424,7 +420,7 @@ public class GeneralListener implements Listener {
         Player player = event.getPlayer();
 
         if (!elytraDisabledInCombat()) return;
-        if (!combatTimers.containsKey(player.getUniqueId())) return;
+        if (!isInCombat(player)) return;
 
         event.setCancelled(true);
 
@@ -446,7 +442,7 @@ public class GeneralListener implements Listener {
         if (!mendingDisabledInCombat()) return;
 
         Player player = event.getPlayer();
-        if (combatTimers.containsKey(player.getUniqueId())) {
+        if (isInCombat(player)) {
             event.setCancelled(true);
         }
     }
@@ -457,6 +453,11 @@ public class GeneralListener implements Listener {
 
     private void startCombatTimer(Player player) {
         UUID playerId = player.getUniqueId();
+
+        if (hasBypass(player)) {
+            cleanup(playerId);
+            return;
+        }
 
         if (elytraDisabledInCombat()) player.setGliding(false);
 

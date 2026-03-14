@@ -6,22 +6,25 @@ combat-log:
     duration-seconds: 15                 # Combat timer duration
     display: actionbar                   # actionbar | bossbar
 
+  permissions:
+    bypass: "combatlog.bypass"           # Permission node that fully bypasses combatlog
+
   restrictions:
     elytra:
       disabled-in-combat: true
     teleporting:
-      disabled-in-combat: false          # Disable any teleport while in combat
+      disabled-in-combat: true          # Disable any teleport while in combat
     mending:
       disabled-in-combat: true
     riptide:
-      stop: false
+      stop: true
       cooldown: 10000                    # riptide cooldown (sec * 100)
     explosions:
       set-combat-on-explosion: true      # End crystals + block explosions set combat
 
   punishment:
-    damage: 5.0                          # Damage penalty for restricted actions (0 = off)
-    kill-on-logout: false                # Kill player if they log out in combat
+    damage: 0                            # Damage penalty for restricted actions (0 = off)
+    kill-on-logout: true                # Kill player if they log out in combat
 
   # =========================
   # Special triggers
@@ -29,7 +32,7 @@ combat-log:
   triggers:
     enderpearl:
       set-combat-on-land: true           # Pearl on land triggers combat
-      only-if-already-in-combat: false   # If false: pearl can start combat
+      only-if-already-in-combat: true   # If false: pearl can start combat
 
   # =========================
   # Exclusions / blocks
@@ -38,36 +41,93 @@ combat-log:
     - "ffa"                              # Worlds where combat timer is ignored
 
   blocked-commands:
-    - "tpa"                              # Commands blocked during combat
+    # Teleportation & Requests
+    - "tpa"
+    - "tpask"
+    - "tpahere"
+    - "tpaskhere"
+    - "tpaccept"
+    - "tpyes"
+    - "tpdeny"
+    - "tpno"
+    - "tpaall"
+    - "rtp"
+    - "wild"
+    - "randomtp"
+    - "tpy"
+    - "tpn"
+    - "call"
+    # Home & Warp Management
+    - "home"
+    - "homes"
+    - "sethome"
+    - "delhome"
+    - "warp"
+    - "warps"
+    - "spawn"
+    - "lobby"
+    - "hub"
+    # Team & Clan Escapes
+    - "team"
+    - "teams"
+    - "team home"
+    - "t home"
+    - "team warp"
+    - "t warp"
+    - "team war"
+    - "clan home"
+    - "c home"
+    # Administration & General TP
+    - "tp"
+    - "tphere"
+    - "tpos"
+    - "back"
+    - "jump"
+    - "top"
+    # Inventory & Utility
+    - "enderchest"
+    - "ec"
+    - "eechest"
+    - "feed"
+    - "heal"
+    - "fly"
+    # Specific Plugin Namespaces
+    - "duckyhomes:home"
 
   # =========================
   # Combat zone
   # =========================
   combat-zone:
-    enabled: true
+    enabled: false
     radius: 10
 
   # =========================
   # Messages
   # =========================
   messages:
-    combat-log: "&c{player} has combat logged!"
-    elytra-use-denied: "&dYou can't use elytra in combat"
-    teleporting-denied: "&dYou can't teleport in combat"
-    blocked-command: "&cYou can't use this command in combat"
+    # Integrated from second config
+    combat-enter: "&eYou are now in combat with {player}!"
+    combat-exit: "&eYou are no longer in combat."
+    combat-log: "&e{player} ragequit LOL!"
+    combat-log-rejoin: "&eYou were killed for leaving in combat noob!"
+
+    # Base config keys with updated text
+    elytra-use-denied: "&eYou cannot use this item while in combat!"
+    teleporting-denied: "&eYou cannot use this command while in combat!"
+    blocked-command: "&eYou cannot use this command while in combat!"
     region-entry-denied: "&cYou can't enter this region in combat"
 
     timer:
-      actionbar: "&c{timeLeft}/{maxTime}"
+      actionbar: "&bCombat: &f{timeLeft}s"
       bossbar-title: "&cIn Combat: {timeLeft}s"
 
 
 anti-kill-abuse:
-  enabled: true
+  enabled: false
 
   limits:
     max-kills: 5                          # more than 5 kills = abuse
-    remove-kill-after-seconds: 60         # kill removed from list after X seconds
+    remove-kill-after-seconds: 60          # kill removed from list after X seconds
 
   punish-commands:
     - "kick {killer} Kill-Abuse detected!"

@@ -4,7 +4,6 @@ import de.nikey.combatLog.Listener.AntiKillAbuse;
 import de.nikey.combatLog.Listener.GeneralListener;
 import de.nikey.combatLog.Utils.Metrics;
 import de.nikey.combatLog.Utils.ModrinthUpdateChecker;
-import de.nikey.combatLog.Utils.WorldGuardHook;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -34,17 +33,4 @@ public final class CombatLog extends JavaPlugin {
         activeTimers.clear();
     }
 
-    @Override
-    public void onLoad() {
-        if (Bukkit.getPluginManager().getPlugin("WorldGuard") == null) {
-            getLogger().info("WorldGuard not found.");
-            return;
-        }
-        WorldGuardHook.tryRegisterFlag(this);
-    }
-
-
-    public static boolean isWorldGuardEnabled() {
-        return WorldGuardHook.isWorldGuardEnabled();
-    }
 }
